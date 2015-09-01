@@ -77,10 +77,10 @@ def save(aps, f):
 
 def main():
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--iface', '-i', default='wlan0', type=str, help='Interface to be used')
+	parser.add_argument('--interface', '-i', default='wlan0', type=str, help='Interface to be used')
 	parser.add_argument('--stime', '-s', default=10, type=int, help='Time to scan near APs')
 	parser.add_argument('--ctime', '-c', default=10, type=int, help='Time to scan devices for each AP')
-	parser.add_argument('--packets', '-p', default=5, type=int, help='Number of DeAuth packets per device')
+	parser.add_argument('--packets', '-p', default=3, type=int, help='Number of DeAuth packets per device')
 	parser.add_argument('--write', '-w', type=str, help='Write scanning to file')
 	parser.add_argument('--load', '-l', type=str, help='Load previous scan')
 	args = parser.parse_args()
@@ -98,8 +98,8 @@ def main():
 	print('[*] Setting up interface {0} to mode monitor..'.format(args.interface))
 	iface_monitor(args.interface)
 
-	print('[*] Gathering near APs data ({0} seconds)..'.format(args.scantime))
-	ap_data = gather_ap_data(args.interface, args.scantime)
+	print('[*] Gathering near APs data ({0} seconds)..'.format(args.stime))
+	ap_data = gather_ap_data(args.interface, args.stime)
 	aps = parse_aps(ap_data)
 
 	print('[*] Gathered {0} APs. {1}'.format(len(aps), [ap for ap in aps]))
@@ -108,13 +108,13 @@ def main():
 		save(aps, args.write)
 
 	for ap in aps:
-		print('[*] Manually changing {0} channel to {1}..'.format(args.interface, aps[ap]['channel']))
+		print('\n[*] Manually changing {0} channel to {1}..'.format(args.interface, aps[ap]['channel']))
 		subprocess.call(['iwconfig', args.interface, 'channel', aps[ap]['channel']]) 
-		print('[*] Gathering devices for AP {0}@{1} ({2}/{3} - {4} seconds remaining)..'.format(aps[ap]['essid'], ap, aps_count, len(aps), args.aptime * (len(aps) - aps_count)))
-		devices_data = gather_devices(args.interface, aps[ap], args.aptime)
+		print('[*] Gathering devices for AP {0}@{1} ({2}/{3} - {4} seconds remaining)..'.format(aps[ap]['essid'], ap, aps_count, len(aps), args.ctime * (len(aps) - aps_count)))
+		devices_data = gather_devices(args.interface, aps[ap], args.ctime)
 		aps[ap]['devices'] = parse_devices(devices_data)
 		devices_count = devices_count + len(aps[ap]['devices'])
-		print('[*] Gathered {0} devices! {1} Total of {2} devices.'.format(len(aps[ap]['devices']), [d for d in aps[ap]['devices']], devices_count))
+		print('[*] Gathered {0} devices. {1} Total of {2}.'.format(len(aps[ap]['devices']), [d for d in aps[ap]['devices']], devices_count))
 		aps_count = aps_count + 1
 
 		if args.write:
